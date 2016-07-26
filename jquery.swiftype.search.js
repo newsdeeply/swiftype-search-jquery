@@ -43,6 +43,7 @@
     Swiftype.pingUrl(url, callback);
   };
 
+  var swifthashpass = false;
   $.fn.swiftypeSearch = function (options) {
     var options = $.extend({}, $.fn.swiftypeSearch.defaults, options);
 
@@ -79,6 +80,7 @@
           location.hash = "stq=" + encodeURIComponent(query) + "&stp=" + page;
         };
 
+      var xhr;
       var submitSearch = function (query, options) {
           options = $.extend({
             page: 1
@@ -110,6 +112,7 @@
           params['per_page'] = handleFunctionParam(config.perPage);
           params['search_fields'] = handleFunctionParam(config.searchFields);
           params['fetch_fields'] = handleFunctionParam(config.fetchFields);
+          params['highlight_fields'] = handleFunctionParam(config.highlightFields);
           params['facets'] = handleFunctionParam(config.facets);
           params['filters'] = handleFunctionParam(config.filters);
           params['document_types'] = handleFunctionParam(config.documentTypes);
@@ -118,7 +121,7 @@
           params['sort_direction'] = handleFunctionParam(config.sortDirection);
           params['spelling'] = handleFunctionParam(config.spelling);
 
-          $.ajax({
+          xhr = $.ajax({
             dataType: "json",
             url: Swiftype.root_url + "/api/v1/public/engines/search.json?callback=?",
             data: params,
@@ -148,13 +151,36 @@
           e.preventDefault();
           var searchQuery = $this.val();
           setSearchHash(searchQuery, 1);
+          $this.blur();
         });
       }
+
+      var timer;
+      $this.bind('input', function (e) {
+         clearTimeout(timer);
+         if (xhr && typeof xhr.abort === 'function') xhr.abort();
+         if ($this.val().length > 2) {
+             timer = setTimeout(function(){
+                defaultLoadingFunction(false, $('#results'));
+                submitSearch($this.val());
+            }, 350);
+         }
+      });
+      $this.bind('blur', function (e) {
+        e.preventDefault();
+        var searchQuery = $this.val();
+        swifthashpass = true;
+        setSearchHash(searchQuery, 1);
+      });
+
 
       $(document).on('click', '[data-hash][data-page]', function (e) {
         e.preventDefault();
         var $this = $(this);
         setSearchHash($.hashParams().stq, $this.data('page'));
+        $('html, body').animate({
+            scrollTop: $resultContainer.offset().top - 115
+        }, 100);
       });
 
       $(document).on('click', '[data-hash][data-spelling-suggestion]', function (e) {
@@ -223,6 +249,9 @@
       });
     });
 
+    $('#searchholder').removeClass('loading');
+    $resultContainer.removeClass('loading');
+
     renderPagination(ctx, data.info);
   };
 
@@ -231,7 +260,13 @@
     };
 
   var defaultLoadingFunction = function(query, $resultContainer) {
-      $resultContainer.html('<p class="st-loading-message">loading...</p>');
+      //$resultContainer.html('<p class="st-loading-message">loading...</p>');
+      if (swifthashpass) {
+          swifthashpass = false;
+          return false;
+      }
+      $('#searchholder').addClass('loading');
+      $resultContainer.addClass('loading');
     };
 
   var defaultOnComplete = function(elem) {
@@ -254,11 +289,11 @@
     }
 
     if (totalResultCount === 0) {
-      $resultContainer.html("<div id='st-no-results' class='st-no-results'>No results found.</div>");
+      $resultContainer.html("<article id='st-no-results' class='st-no-results inner standard'><h3>We couldn't find any results.</h3></article>");
     }
 
     if (spellingSuggestion !== null) {
-      $resultContainer.append('<div class="st-spelling-suggestion">Did you mean <a href="#" data-hash="true" data-spelling-suggestion="' + spellingSuggestion + '">' + spellingSuggestion + '</a>?</div>');
+      $resultContainer.append('<div class="st-spelling-suggestion inner standard">Did you mean <a href="#" data-hash="true" data-spelling-suggestion="' + spellingSuggestion + '">' + spellingSuggestion + '</a>?</div>');
     }
   };
 
@@ -290,6 +325,7 @@
     sortField: undefined,
     sortDirection: undefined,
     fetchFields: undefined,
+    highlightFields: undefined,
     preRenderFunction: undefined,
     postRenderFunction: defaultPostRenderFunction,
     loadingFunction: defaultLoadingFunction,
